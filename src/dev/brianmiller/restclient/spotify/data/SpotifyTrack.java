@@ -1,4 +1,7 @@
-package dev.brianmiller.restclient.spotify;
+package dev.brianmiller.restclient.spotify.data;
+
+import dev.brianmiller.restclient.spotify.SpotifyArtist;
+import dev.brianmiller.restclient.spotify.SpotifyExternalUrls;
 
 public record SpotifyTrack(
     SpotifyAlbum album,
@@ -8,7 +11,7 @@ public record SpotifyTrack(
     int duration_ms,
     boolean explicit,
     // external_ids
-    // external_urls
+    SpotifyExternalUrls external_urls,
     String href,
     String id,
     boolean is_playable,
