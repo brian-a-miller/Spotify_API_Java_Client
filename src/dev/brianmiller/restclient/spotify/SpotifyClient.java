@@ -13,6 +13,10 @@ import dev.brianmiller.properties.Properties;
 
 import dev.brianmiller.restclient.RestClient;
 import dev.brianmiller.restclient.RestResponse;
+import dev.brianmiller.restclient.spotify.data.SpotifyAlbum;
+import dev.brianmiller.restclient.spotify.data.SpotifyTrack;
+import dev.brianmiller.restclient.spotify.data.response.SpotifyAccessTokenResponse;
+import dev.brianmiller.restclient.spotify.data.response.SpotifyGetAlbumTracksResponse;
 
 import static java.net.HttpURLConnection.HTTP_OK;
 
@@ -24,8 +28,11 @@ public class SpotifyClient {
     private final static String REQUEST_ACCESS_TOKEN_ENDPOINT_URL =
             "https://accounts.spotify.com/api/token";
 
-    private final static String PLAYLISTS_URL_PREFIX = "https://api.spotify.com/v1/playlists/";
-    private final static String PLAYLIST_TRACKS_URL_SUFFIX = "/tracks";
+    private final static String REQUEST_URL_PREFIX_ALBUMS =
+            "https://api.spotify.com/v1/albums/";
+
+    // private final static String PLAYLISTS_URL_PREFIX = "https://api.spotify.com/v1/playlists/";
+    // private final static String PLAYLIST_TRACKS_URL_SUFFIX = "/tracks";
 
     private final static String HEADER_ACCEPT_KEY   = "Accept";
     private final static String HEADER_ACCEPT_VALUE = "application/json";
@@ -47,20 +54,22 @@ public class SpotifyClient {
 
     private static String clientID;
     private static String clientSecret;
-    private static String accessToken;
-    private static LocalDateTime accessTokenExpiration;
+    private String accessToken;
+    private LocalDateTime accessTokenExpiration;
+    private String refreshToken;
 
     static {
         clientID = Properties.getValue(PROPERTY_KEY_CLIENT_ID);
         clientSecret = Properties.getValue(PROPERTY_KEY_CLIENT_SECRET);
-        accessToken = null;
-        accessTokenExpiration = null;
     }
 
     private RestClient restClient;
 
     public SpotifyClient() {
         this.restClient = new RestClient();
+
+        accessToken = null;
+        accessTokenExpiration = null;
     }
 
     private String getAccessToken() {
@@ -194,4 +203,57 @@ public class SpotifyClient {
         return albumsList;
     }
 
+    // https://developer.spotify.com/documentation/web-api/reference/get-an-albums-tracks
+    public List<SpotifyTrack> getAlbumTracks(String albumID) {
+
+        if (albumID == null || albumID.isBlank()) {
+            throw new IllegalArgumentException("Album ID must not be null or empty/blank");
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(REQUEST_URL_PREFIX_ALBUMS);
+        sb.append(albumID);
+        sb.append("/tracks?market=US&limit=50&offset=0");
+
+        String url = sb.toString();
+        String accessToken = getAccessToken();
+
+        Map<String, String> headerMap = new HashMap<>();
+        headerMap.put(HEADER_ACCEPT_KEY, HEADER_ACCEPT_VALUE);
+        headerMap.put(HEADER_AUTHORIZATION_KEY, HEADER_AUTHORIZATION_VALUE_PREFIX + accessToken);
+
+        Gson gson = new Gson();
+        RestResponse restResponse = restClient.get(url, headerMap);
+        if (restResponse == null) {
+            System.err.println("null response to " + url);
+            return null;
+        }
+
+        List<SpotifyTrack> tracks = new ArrayList<>();
+
+        if ((restResponse.getCode() == HTTP_OK) &&
+                (restResponse.getBody() != null)) {
+
+            try {
+                SpotifyGetAlbumTracksResponse spotifyResponse =
+                        gson.fromJson(restResponse.getBody(), SpotifyGetAlbumTracksResponse.class);
+
+                if (spotifyResponse != null) {
+                    if (spotifyResponse.items() != null) {
+                        for (var track : spotifyResponse.items()) {
+                            if ((track != null) && (track.name() != null) && (track.track_number() > 0)) {
+                                tracks.add(track);
+                            }
+                        }
+                    }
+                }
+
+            } catch (JsonSyntaxException jsonEx) {
+                System.err.println("Failed to parse response from Spotify:");
+                jsonEx.printStackTrace(System.err);
+            }
+        }
+
+        return tracks;
+    }
 }
